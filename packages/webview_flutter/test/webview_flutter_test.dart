@@ -658,6 +658,149 @@ void main() {
     });
   });
 
+  group('$ErrorCallback', () {
+    testWidgets('onError is not null', (WidgetTester tester) async {
+      int returnedCode;
+      String returnedDescription;
+      String returnedUrl;
+
+      await tester.pumpWidget(WebView(
+        initialUrl: 'https:malformed.url.',
+        onError: (int code, String description, String url) {
+          returnedCode = code;
+          returnedDescription = description;
+          returnedUrl = url;
+        },
+      ));
+
+      final FakePlatformWebView platformWebView =
+          fakePlatformViewsController.lastCreatedView;
+
+      platformWebView.fakeOnErrorCallback();
+
+      expect(platformWebView.currentUrl, returnedUrl);
+      expect(FakePlatformWebView.ERROR_BAD_URL_CODE, returnedCode);
+      expect(
+          FakePlatformWebView.ERROR_BAD_URL_DESCRIPTION, returnedDescription);
+    });
+
+    testWidgets('onError is null', (WidgetTester tester) async {
+      await tester.pumpWidget(const WebView(
+        initialUrl: 'https:malformed.url.',
+        onPageFinished: null,
+      ));
+
+      final FakePlatformWebView platformWebView =
+          fakePlatformViewsController.lastCreatedView;
+
+      // The platform side will always invoke a call for onError. This is
+      // to test that it does not crash on a null callback.
+      platformWebView.fakeOnHttpErrorCallback();
+    });
+
+    testWidgets('onError after webview changed', (WidgetTester tester) async {
+      int returnedCode;
+      String returnedDescription;
+      String returnedUrl;
+
+      await tester.pumpWidget(WebView(
+        initialUrl: 'https:malformed.url.',
+        onError: (int code, String description, String url) {},
+      ));
+
+      await tester.pumpWidget(WebView(
+        initialUrl: 'https:malformed.url.2.',
+        onError: (int code, String description, String url) {
+          returnedCode = code;
+          returnedDescription = description;
+          returnedUrl = url;
+        },
+      ));
+
+      final FakePlatformWebView platformWebView =
+          fakePlatformViewsController.lastCreatedView;
+
+      platformWebView.fakeOnErrorCallback();
+
+      expect(platformWebView.currentUrl, returnedUrl);
+      expect(FakePlatformWebView.ERROR_BAD_URL_CODE, returnedCode);
+      expect(
+          FakePlatformWebView.ERROR_BAD_URL_DESCRIPTION, returnedDescription);
+    });
+  });
+
+  group('$HttpErrorCallback', () {
+    testWidgets('onHttpError is not null', (WidgetTester tester) async {
+      int returnedCode;
+      String returnedDescription;
+      String returnedUrl;
+
+      await tester.pumpWidget(WebView(
+        initialUrl: 'https://youtube.com',
+        onError: (int code, String description, String url) {
+          returnedCode = code;
+          returnedDescription = description;
+          returnedUrl = url;
+        },
+      ));
+
+      final FakePlatformWebView platformWebView =
+          fakePlatformViewsController.lastCreatedView;
+
+      platformWebView.fakeOnHttpErrorCallback();
+
+      expect(platformWebView.currentUrl, returnedUrl);
+      expect(FakePlatformWebView.HTTP_ERROR_NOT_FOUND_CODE, returnedCode);
+      expect(FakePlatformWebView.HTTP_ERROR_NOT_FOUND_DESCRIPTION,
+          returnedDescription);
+    });
+
+    testWidgets('onHttpError is null', (WidgetTester tester) async {
+      await tester.pumpWidget(const WebView(
+        initialUrl: 'https://youtube.com',
+        onPageFinished: null,
+      ));
+
+      final FakePlatformWebView platformWebView =
+          fakePlatformViewsController.lastCreatedView;
+
+      // The platform side will always invoke a call for onError. This is
+      // to test that it does not crash on a null callback.
+      platformWebView.fakeOnHttpErrorCallback();
+    });
+
+    testWidgets('onHttpError after webview changed',
+        (WidgetTester tester) async {
+      int returnedCode;
+      String returnedDescription;
+      String returnedUrl;
+
+      await tester.pumpWidget(WebView(
+        initialUrl: 'https://youtube.com',
+        onError: (int code, String description, String url) {},
+      ));
+
+      await tester.pumpWidget(WebView(
+        initialUrl: 'https://youtube.com',
+        onError: (int code, String description, String url) {
+          returnedCode = code;
+          returnedDescription = description;
+          returnedUrl = url;
+        },
+      ));
+
+      final FakePlatformWebView platformWebView =
+          fakePlatformViewsController.lastCreatedView;
+
+      platformWebView.fakeOnHttpErrorCallback();
+
+      expect(platformWebView.currentUrl, returnedUrl);
+      expect(FakePlatformWebView.HTTP_ERROR_NOT_FOUND_CODE, returnedCode);
+      expect(FakePlatformWebView.HTTP_ERROR_NOT_FOUND_DESCRIPTION,
+          returnedDescription);
+    });
+  });
+
   group('navigationDelegate', () {
     testWidgets('hasNavigationDelegate', (WidgetTester tester) async {
       await tester.pumpWidget(const WebView(
@@ -855,6 +998,11 @@ class FakePlatformWebView {
     channel.setMockMethodCallHandler(onMethodCall);
   }
 
+  static const int ERROR_BAD_URL_CODE = -12;
+  static const String ERROR_BAD_URL_DESCRIPTION = 'Malformed URL';
+  static const int HTTP_ERROR_NOT_FOUND_CODE = 404;
+  static const String HTTP_ERROR_NOT_FOUND_DESCRIPTION = 'Not found';
+
   MethodChannel channel;
 
   List<String> history = <String>[];
@@ -974,6 +1122,50 @@ class FakePlatformWebView {
     final ByteData data = codec.encodeMethodCall(MethodCall(
       'onPageFinished',
       <dynamic, dynamic>{'url': currentUrl},
+    ));
+
+    // TODO(hterkelsen): Remove this when defaultBinaryMessages is in stable.
+    // https://github.com/flutter/flutter/issues/33446
+    // ignore: deprecated_member_use
+    BinaryMessages.handlePlatformMessage(
+      channel.name,
+      data,
+      (ByteData data) {},
+    );
+  }
+
+  void fakeOnErrorCallback() {
+    final StandardMethodCodec codec = const StandardMethodCodec();
+
+    final ByteData data = codec.encodeMethodCall(MethodCall(
+      'onError',
+      <dynamic, dynamic>{
+        'url': currentUrl,
+        'code': ERROR_BAD_URL_CODE,
+        'description': ERROR_BAD_URL_DESCRIPTION
+      },
+    ));
+
+    // TODO(hterkelsen): Remove this when defaultBinaryMessages is in stable.
+    // https://github.com/flutter/flutter/issues/33446
+    // ignore: deprecated_member_use
+    BinaryMessages.handlePlatformMessage(
+      channel.name,
+      data,
+      (ByteData data) {},
+    );
+  }
+
+  void fakeOnHttpErrorCallback() {
+    final StandardMethodCodec codec = const StandardMethodCodec();
+
+    final ByteData data = codec.encodeMethodCall(MethodCall(
+      'onError',
+      <dynamic, dynamic>{
+        'url': currentUrl,
+        'code': HTTP_ERROR_NOT_FOUND_CODE,
+        'description': HTTP_ERROR_NOT_FOUND_DESCRIPTION
+      },
     ));
 
     // TODO(hterkelsen): Remove this when defaultBinaryMessages is in stable.

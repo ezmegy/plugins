@@ -69,8 +69,27 @@ enum NavigationDecision {
 /// See also: [WebView.navigationDelegate].
 typedef NavigationDecision NavigationDelegate(NavigationRequest navigation);
 
-/// Signature for when a [WebView] has finished loading a page.
+/// Signature for when a [WebView] has successfully finished loading a page.
+///
+/// For attempted loading that resulted in an HttpError code other than 200 see [HttpErrorCallback]
 typedef void PageFinishedCallback(String url);
+
+/// Signature for when a [WebView] could not load a resource.
+/// [code] is the resulting error's integer code. See
+///  https://developer.apple.com/documentation/foundation/1508628-url_loading_system_error_codes
+///  and
+///  https://developer.android.com/reference/android/webkit/WebViewClient.html
+///  for the respective platform errors codes. E.g. ERROR_BAD_URL = -12 or NSURLErrorBadURL = -1000.
+/// [description] is the resulting error code's localized description e.g. A malformed URL prevented a URL request from being initiated.
+typedef void ErrorCallback(int code, String description, String url);
+
+/// Signature for when a [WebView] has failed to load a page.
+///
+/// For successful loading (HttpError code == 200) see [PageFinishedCallback]
+///
+/// [code] is the resulting Http integer code >= 400, e.g. 404.
+/// [description] is the resulting Http code's localized description e.g. Not found.
+typedef void HttpErrorCallback(int code, String description, String url);
 
 /// Specifies possible restrictions on automatic media playback.
 ///
@@ -139,6 +158,8 @@ class WebView extends StatefulWidget {
     this.navigationDelegate,
     this.gestureRecognizers,
     this.onPageFinished,
+    this.onError,
+    this.onHttpError,
     this.debuggingEnabled = false,
     this.userAgent,
     this.initialMediaPlaybackPolicy =
@@ -253,7 +274,7 @@ class WebView extends StatefulWidget {
   ///     * When a navigationDelegate is set HTTP requests do not include the HTTP referer header.
   final NavigationDelegate navigationDelegate;
 
-  /// Invoked when a page has finished loading.
+  /// Invoked when a page has successfully finished loading, resulting in an HttpError code 200.
   ///
   /// This is invoked only for the main frame.
   ///
@@ -264,6 +285,30 @@ class WebView extends StatefulWidget {
   /// directly in the HTML has been loaded and code injected with
   /// [WebViewController.evaluateJavascript] can assume this.
   final PageFinishedCallback onPageFinished;
+
+  /// Invoked when a resource has failed loading, most likely due problem while connecting to the server.
+  ///
+  /// This is invoked only for the main frame.
+  ///
+  /// When [onError] is invoked on Android, the page being rendered may
+  /// not be updated yet.
+  ///
+  /// When invoked on iOS or Android, any Javascript code that is embedded
+  /// directly in the HTML has been loaded and code injected with
+  /// [WebViewController.evaluateJavascript] can assume this.
+  final ErrorCallback onError;
+
+  /// Invoked when a resource has failed loading successfully, and resulted in an HttpError code >= 400 instead.
+  ///
+  /// This is invoked only for the main frame.
+  ///
+  /// When [onHttpError] is invoked on Android, the page being rendered may
+  /// not be updated yet.
+  ///
+  /// When invoked on iOS or Android, any Javascript code that is embedded
+  /// directly in the HTML has been loaded and code injected with
+  /// [WebViewController.evaluateJavascript] can assume this.
+  final HttpErrorCallback onHttpError;
 
   /// Controls whether WebView debugging is enabled.
   ///
@@ -451,6 +496,20 @@ class _PlatformCallbacksHandler implements WebViewPlatformCallbacksHandler {
   void onPageFinished(String url) {
     if (_widget.onPageFinished != null) {
       _widget.onPageFinished(url);
+    }
+  }
+
+  @override
+  void onError(int code, String description, String url) {
+    if (_widget.onError != null) {
+      _widget.onError(code, description, url);
+    }
+  }
+
+  @override
+  void onHttpError(int code, String description, String url) {
+    if (_widget.onHttpError != null) {
+      _widget.onHttpError(code, description, url);
     }
   }
 

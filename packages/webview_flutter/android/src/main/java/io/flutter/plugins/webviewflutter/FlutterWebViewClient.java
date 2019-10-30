@@ -8,10 +8,13 @@ import android.annotation.TargetApi;
 import android.os.Build;
 import android.util.Log;
 import android.view.KeyEvent;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 import androidx.webkit.WebViewClientCompat;
 import io.flutter.plugin.common.MethodChannel;
 import java.util.HashMap;
@@ -73,6 +76,22 @@ class FlutterWebViewClient {
     methodChannel.invokeMethod("onPageFinished", args);
   }
 
+  private void onError(WebView view, int errorCode, String description, String url) {
+    Map<String, Object> data = new HashMap<>();
+    data.put("code", Integer.toString(errorCode));
+    data.put("description", description);
+    data.put("url", url);
+    methodChannel.invokeMethod("onError", data);
+  }
+
+  private void onHttpError(WebView view, int errorCode, String description, String url) {
+      Map<String, Object> data = new HashMap<>();
+      data.put("code", errorCode);
+      data.put("description", description);
+      data.put("url", url);
+      methodChannel.invokeMethod("onHttpError", data);
+  }
+
   private void notifyOnNavigationRequest(
       String url, Map<String, String> headers, WebView webview, boolean isMainFrame) {
     HashMap<String, Object> args = new HashMap<>();
@@ -112,6 +131,23 @@ class FlutterWebViewClient {
         FlutterWebViewClient.this.onPageFinished(view, url);
       }
 
+      @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+      @Override
+      public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse errorResponse) {
+        FlutterWebViewClient.this.onHttpError(view, errorResponse.getStatusCode(), errorResponse.getReasonPhrase(), request.getUrl().toString());
+      }
+
+      @RequiresApi(api = Build.VERSION_CODES.N)
+      @Override
+      public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+        FlutterWebViewClient.this.onError(view, error.getErrorCode(), error.getDescription().toString(), request.getUrl().toString());
+      }
+
+      @Override
+      public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+        FlutterWebViewClient.this.onError(view, errorCode, description, failingUrl);
+      }
+
       @Override
       public void onUnhandledKeyEvent(WebView view, KeyEvent event) {
         // Deliberately empty. Occasionally the webview will mark events as having failed to be
@@ -137,6 +173,17 @@ class FlutterWebViewClient {
       @Override
       public void onPageFinished(WebView view, String url) {
         FlutterWebViewClient.this.onPageFinished(view, url);
+      }
+
+      @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
+      @Override
+      public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse errorResponse) {
+        FlutterWebViewClient.this.onHttpError(view, errorResponse.getStatusCode(), errorResponse.getReasonPhrase(), request.getUrl().toString());
+      }
+
+      @Override
+      public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+        FlutterWebViewClient.this.onError(view, errorCode, description, failingUrl);
       }
 
       @Override

@@ -5,10 +5,10 @@
 #import "FLTWKNavigationDelegate.h"
 
 @implementation FLTWKNavigationDelegate {
-  FlutterMethodChannel* _methodChannel;
+  FlutterMethodChannel *_methodChannel;
 }
 
-- (instancetype)initWithChannel:(FlutterMethodChannel*)channel {
+- (instancetype)initWithChannel:(FlutterMethodChannel *)channel {
   self = [super init];
   if (self) {
     _methodChannel = channel;
@@ -16,14 +16,14 @@
   return self;
 }
 
-- (void)webView:(WKWebView*)webView
-    decidePolicyForNavigationAction:(WKNavigationAction*)navigationAction
+- (void)webView:(WKWebView *)webView
+    decidePolicyForNavigationAction:(WKNavigationAction *)navigationAction
                     decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
   if (!self.hasDartNavigationDelegate) {
     decisionHandler(WKNavigationActionPolicyAllow);
     return;
   }
-  NSDictionary* arguments = @{
+  NSDictionary *arguments = @{
     @"url" : navigationAction.request.URL.absoluteString,
     @"isForMainFrame" : @(navigationAction.targetFrame.isMainFrame)
   };
@@ -50,13 +50,29 @@
                             decisionHandler(WKNavigationActionPolicyAllow);
                             return;
                           }
-                          NSNumber* typedResult = result;
+                          NSNumber *typedResult = result;
                           decisionHandler([typedResult boolValue] ? WKNavigationActionPolicyAllow
                                                                   : WKNavigationActionPolicyCancel);
                         }];
 }
 
-- (void)webView:(WKWebView*)webView didFinishNavigation:(WKNavigation*)navigation {
-  [_methodChannel invokeMethod:@"onPageFinished" arguments:@{@"url" : webView.URL.absoluteString}];
+- (void)webView:(WKWebView *)webView decidePolicyForNavigationResponse:(WKNavigationResponse *)navigationResponse decisionHandler:(void (^)(WKNavigationResponsePolicy))decisionHandler {
+    if ([navigationResponse.response isKindOfClass:[NSHTTPURLResponse class]]) {
+        NSHTTPURLResponse *response = (NSHTTPURLResponse *)navigationResponse.response;
+        if (response.statusCode >= 400) {
+            [_methodChannel invokeMethod:@"onHttpError" arguments:@{@"code": [NSNumber numberWithLong: response.statusCode], @"description": [NSHTTPURLResponse localizedStringForStatusCode:response.statusCode], @"url": webView.URL.absoluteString}];
+        }
+    }
+    decisionHandler(WKNavigationResponsePolicyAllow);
+}
+
+- (void)webView:(WKWebView *)webView didFailProvisionalNavigation:(WKNavigation *)navigation withError:(NSError *)error {
+    NSString *url = webView.URL == nil ? @"?" : webView.URL.absoluteString;
+    
+    [_methodChannel invokeMethod:@"onError" arguments:@{@"code": [NSNumber numberWithLong: error.code], @"description": [NSString stringWithFormat:@"%@", error.localizedDescription], @"url": url}];
+}
+
+- (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
+    [_methodChannel invokeMethod:@"onPageFinished" arguments:@{@"url" : webView.URL.absoluteString}];
 }
 @end
